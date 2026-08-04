@@ -1,0 +1,293 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="基于 CopyCaller 公开原理的 qPCR CNV 分析工具">
+  <meta property="og:title" content="CNV分析工具 / CNV Analysis Tool">
+  <meta property="og:description" content="从孔级 Ct 到样本级拷贝数，支持 qPCR CNV 计算、质控、校准与实验记录导出。">
+  <meta property="og:type" content="website">
+  <meta property="og:image" content="/og.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:image" content="/og.png">
+  <title>CNV分析工具 v 1.3</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="hero">
+    <div class="hero__inner">
+      <div class="brand-mark" aria-hidden="true">
+        <span></span><span></span><span></span><span></span>
+      </div>
+      <div class="hero__copy">
+        <p class="eyebrow">TaqMan qPCR · COPY NUMBER VARIATION</p>
+        <h1>CNV分析工具 <span class="version-tag">v 1.3</span></h1>
+        <p class="hero__subtitle">从孔级 Ct 到样本级拷贝数，保留公式、质控、校准与审计轨迹。</p>
+      </div>
+      <div class="privacy-pill">
+        <span class="privacy-pill__dot"></span>
+        本地浏览器计算，数据不上传
+      </div>
+    </div>
+  </header>
+
+  <main class="shell">
+    <section class="notice notice--ruo" aria-label="使用边界">
+      <strong>仅供科研使用（RUO）</strong>
+      <span>本工具用于透明复算与研究性判读，不用于诊断、治疗选择或个体临床决策。</span>
+    </section>
+
+    <section class="step-card step-card--upload" id="data-section">
+      <div class="section-heading">
+        <span class="step-number">01</span>
+        <div>
+          <h2>导入仪器结果</h2>
+          <p>支持 QuantStudio / Applied Biosystems 导出的 .xls、.xlsx、.csv 和 .txt，自动识别表头与部分孔板。</p>
+        </div>
+      </div>
+
+      <label class="drop-zone" id="drop-zone" for="file-input">
+        <input id="file-input" type="file" accept=".xls,.xlsx,.csv,.txt,.tsv" hidden>
+        <span class="drop-zone__icon" aria-hidden="true">↑</span>
+        <span class="drop-zone__title">将文件拖到这里，或点击选择</span>
+        <span class="drop-zone__hint">原始文件只在当前页面内解析，不会被修改。</span>
+      </label>
+
+      <div class="file-status" id="file-status" role="status">
+        <span class="status-dot status-dot--idle"></span>
+        <span>尚未导入数据</span>
+      </div>
+    </section>
+
+    <div id="workspace" class="workspace is-hidden">
+      <section class="summary-strip" aria-label="导入摘要">
+        <article><span class="summary-label">物理孔</span><strong id="stat-wells">—</strong><small id="stat-capacity"></small></article>
+        <article><span class="summary-label">样本</span><strong id="stat-samples">—</strong><small>不含 NTC</small></article>
+        <article><span class="summary-label">Assay 层</span><strong id="stat-assays">—</strong><small>按 target / panel</small></article>
+        <article><span class="summary-label">内参</span><strong id="stat-reference">—</strong><small>可在下方确认</small></article>
+        <article class="summary-release"><span class="summary-label">放行状态</span><strong id="stat-release">—</strong><small>分析可查看，放行受 QC 控制</small></article>
+      </section>
+
+      <nav class="workflow-nav" aria-label="分析导航">
+        <a href="#qc-section">02 运行 QC</a>
+        <a href="#settings-section">03 分析参数</a>
+        <a href="#calibration-section">04 校准设置</a>
+        <a href="#record-section">05 实验登记</a>
+        <a href="#results-section">06 结果与导出</a>
+      </nav>
+
+      <section class="step-card" id="qc-section">
+        <div class="section-heading section-heading--split">
+          <div class="section-heading__left">
+            <span class="step-number">02</span>
+            <div>
+              <h2>运行与数据质控</h2>
+              <p>先判断这批数据能不能被解释，再计算拷贝数。</p>
+            </div>
+          </div>
+          <button class="button button--quiet" id="toggle-metadata" type="button">查看仪器元数据</button>
+        </div>
+        <div id="critical-banner"></div>
+        <div id="qc-list" class="qc-list"></div>
+        <div id="ntc-setup" class="ntc-setup" aria-label="NTC 设置"></div>
+        <details id="metadata-panel" class="metadata-panel">
+          <summary>仪器元数据</summary>
+          <div id="metadata-table" class="table-wrap"></div>
+        </details>
+      </section>
+
+      <section class="step-card" id="settings-section">
+        <div class="section-heading">
+          <span class="step-number">03</span>
+          <div>
+            <h2>分析参数</h2>
+            <p>默认值来自 CopyCaller v2.0 公开手册；它们是可调的经验阈值。</p>
+          </div>
+        </div>
+        <div class="settings-grid">
+          <label>
+            <span>内参 assay</span>
+            <select id="setting-reference"></select>
+          </label>
+          <label>
+            <span>内参 Ct 排除阈值</span>
+            <input id="setting-reference-ct" type="number" min="1" max="50" step="0.1" value="32">
+            <small>Ct 高于此值的孔不参与计算。</small>
+          </label>
+          <label>
+            <span>0-copy ΔCt 阈值</span>
+            <input id="setting-zero-dct" type="number" min="0" max="20" step="0.1" value="4">
+            <small>目标相对内参过弱时作为 0-copy 证据。</small>
+          </label>
+          <label>
+            <span>最少有效复孔</span>
+            <input id="setting-min-reps" type="number" min="2" max="12" step="1" value="2">
+            <small>文档推荐 4 复孔；少于此值直接 No call。</small>
+          </label>
+          <label>
+            <span>复孔 ΔCt SD 预警值</span>
+            <input id="setting-rep-sd" type="number" min="0.01" max="2" step="0.01" value="0.15">
+            <small>仅用于预警；最终限值应由实验室验证。</small>
+          </label>
+          <label class="toggle-field">
+            <span>反应组合防混合</span>
+            <span class="toggle-line">
+              <input id="setting-split-panels" type="checkbox" checked>
+              <span>同一 target 在 duplex / triplex 中分开分析</span>
+            </span>
+            <small>只有桥接验证通过后才建议关闭。</small>
+          </label>
+        </div>
+        <div class="action-row">
+          <button class="button button--primary" id="apply-settings" type="button">应用参数并重新分析</button>
+          <span id="settings-message" class="inline-message"></span>
+        </div>
+      </section>
+
+      <section class="step-card" id="calibration-section">
+        <div class="section-heading">
+          <span class="step-number">04</span>
+          <div>
+            <h2>按 assay 配置校准</h2>
+            <p>仪器文件中的 Reference Sample 不会自动继承。主校准品不合格时，改选已独立确认 CN 且本板通过资格检查的备用校准品或校准组。</p>
+          </div>
+        </div>
+        <div class="calibration-legend">
+          <span><i class="legend-dot legend-dot--eligible"></i>可选，但仍需独立确认 CN</span>
+          <span><i class="legend-dot legend-dot--blocked"></i>禁止作为校准品</span>
+        </div>
+        <div id="calibration-cards" class="calibration-grid"></div>
+        <div class="action-row action-row--sticky">
+          <button class="button button--primary" id="apply-calibration" type="button">锁定校准设置并计算</button>
+          <span class="inline-message" id="calibration-message"></span>
+        </div>
+      </section>
+
+      <section class="step-card" id="record-section">
+        <div class="section-heading section-heading--split">
+          <div class="section-heading__left">
+            <span class="step-number">05</span>
+            <div>
+              <h2>实验登记信息</h2>
+              <p>仪器与分析信息自动写入；只需补录板号、人员和本板试剂批次。品牌、货号等常用信息可在当前浏览器复用，批号和有效期每次重新确认。</p>
+            </div>
+          </div>
+          <div class="record-actions">
+            <span id="record-completeness" class="record-completeness">待导入</span>
+            <button class="button button--quiet" id="save-registration" type="button">保存本次登记</button>
+          </div>
+        </div>
+
+        <p id="record-save-status" class="record-save-status">本次登记尚未保存</p>
+
+        <div class="record-grid">
+          <label><span>Run ID（自动）</span><input id="record-run-id" readonly></label>
+          <label><span>Plate ID</span><input id="record-plate-id" placeholder="本次板号"></label>
+          <label><span>Analysis ID（自动）</span><input id="record-analysis-id" readonly></label>
+          <label><span>实验日期</span><input id="record-date" type="date"></label>
+          <label><span>操作人</span><input id="record-operator" placeholder="姓名或工号"></label>
+          <label><span>反应体积</span><input id="record-volume" placeholder="例如 10 µL"></label>
+          <label><span>Protocol / SOP 版本</span><input id="record-protocol" placeholder="例如 CNV-SOP v1.0"></label>
+          <label><span>记录状态</span><select id="record-status"><option>草稿</option><option selected>已记录</option><option>已复核</option></select></label>
+        </div>
+
+        <details class="record-details" open>
+          <summary>试剂批次与复核信息</summary>
+          <div class="record-subsection">
+            <h3>Master Mix</h3>
+            <div class="record-grid record-grid--four">
+              <label><span>品牌</span><input id="record-mix-brand" placeholder="品牌"></label>
+              <label><span>Cat.</span><input id="record-mix-catalog" placeholder="货号"></label>
+              <label><span>批号</span><input id="record-mix-lot" placeholder="Lot"></label>
+              <label><span>有效期</span><input id="record-mix-expiry" type="date"></label>
+            </div>
+          </div>
+
+          <div class="record-subsection">
+            <h3>Assay / 试剂</h3>
+            <p>Target 和 Reporter 由仪器文件自动识别；品牌、Assay ID、浓度等可在本机复用，批号不会自动沿用到下一板。</p>
+            <div id="record-assays" class="registration-assays"></div>
+          </div>
+
+          <div class="record-subsection">
+            <h3>人工复核</h3>
+            <div class="record-grid record-grid--four">
+              <label><span>最终结论</span><select id="record-final-decision"></select></label>
+              <label><span>复核人</span><input id="record-reviewer" placeholder="姓名或工号"></label>
+              <label><span>复核日期</span><input id="record-review-date" type="date"></label>
+              <label class="record-wide"><span>复核说明</span><input id="record-review-note" placeholder="放行依据、限制或后续处理"></label>
+            </div>
+            <label class="record-notes"><span>实验 / 分析备注</span><textarea id="record-notes" placeholder="异常、重做安排或其他需要随结果长期保存的信息"></textarea></label>
+          </div>
+        </details>
+      </section>
+
+      <section class="step-card" id="results-section">
+        <div class="section-heading section-heading--split">
+          <div class="section-heading__left">
+            <span class="step-number">06</span>
+            <div>
+              <h2>结果、图形与审计导出</h2>
+              <p>首页一行对应一个 Sample，直接汇总各 target / panel 的 CN；计算明细、实验登记、QC、原始 Ct 和审计信息随同保存。</p>
+            </div>
+          </div>
+          <div class="toolbar">
+            <button class="button button--quiet" id="export-xlsx" type="button">导出完整实验记录 XLSX</button>
+            <button class="button button--quiet" id="export-csv" type="button">导出 CSV</button>
+            <button class="button button--quiet" id="export-json" type="button">保存分析 JSON</button>
+            <button class="button button--quiet" id="print-report" type="button">打印 / PDF</button>
+          </div>
+        </div>
+
+        <div class="result-tabs" role="tablist">
+          <button class="result-tab is-active" data-tab="summary" type="button">样本结果</button>
+          <button class="result-tab" data-tab="copyplot" type="button">Copy Number 图</button>
+          <button class="result-tab" data-tab="dctplot" type="button">ΔCt 分布</button>
+          <button class="result-tab" data-tab="plate" type="button">孔板图</button>
+          <button class="result-tab" data-tab="wells" type="button">孔级审计</button>
+          <button class="result-tab" data-tab="method" type="button">方法边界</button>
+        </div>
+
+        <div class="tab-panel is-active" data-panel="summary">
+          <div class="result-filter-row">
+            <label><span>显示 assay</span><select id="result-assay-filter"></select></label>
+            <label class="search-field"><span>搜索样本</span><input id="result-search" type="search" placeholder="Sample ID"></label>
+          </div>
+          <div id="results-table" class="table-wrap table-wrap--results"></div>
+        </div>
+        <div class="tab-panel" data-panel="copyplot">
+          <div id="copy-number-plot" class="chart-card"></div>
+        </div>
+        <div class="tab-panel" data-panel="dctplot">
+          <div id="delta-ct-plot" class="chart-card"></div>
+        </div>
+        <div class="tab-panel" data-panel="plate">
+          <div class="plate-controls"><span>颜色表示每个物理孔的最严重状态；悬停可查看详细信息。</span></div>
+          <div id="plate-map" class="plate-map"></div>
+        </div>
+        <div class="tab-panel" data-panel="wells">
+          <div id="well-table" class="table-wrap table-wrap--results"></div>
+        </div>
+        <div class="tab-panel" data-panel="method">
+          <div id="method-notes" class="method-notes"></div>
+        </div>
+      </section>
+    </div>
+
+    <section class="references">
+      <h2>方法依据</h2>
+      <p>已知校准样本的 ΔΔCt 公式、0-copy 规则、内参 Ct 阈值、众数校准的理论模型与 QC 指标定义来自官方手册。本工具的群体拟合、Confidence-like 与自动离群为可审计的透明近似。</p>
+      <div class="reference-links">
+        <a href="https://assets.thermofisher.com/TFS-Assets/LSG/manuals/cms_062369.pdf" target="_blank" rel="noreferrer">CopyCaller Software v2.0 User Guide</a>
+        <a href="https://documents.thermofisher.com/TFS-Assets/LSG/manuals/4397425_CopyNumAssays_UG.pdf" target="_blank" rel="noreferrer">TaqMan Copy Number Assays User Guide</a>
+      </div>
+    </section>
+  </main>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <script src="vendor/xlsx.full.min.js"></script>
+  <script src="core.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

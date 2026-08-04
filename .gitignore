@@ -1,0 +1,45 @@
+# macOS
+.DS_Store
+
+# JavaScript dependencies
+node_modules/
+
+# Build and test outputs
+dist/
+.next/
+.vinext/
+out/
+.wrangler/
+coverage/
+
+# Logs and temporary files
+*.log
+tmp/
+cache/
+work/
+outputs/
+
+# Credentials and local configuration
+.env
+.env.*
+*.pem
+*.key
+credentials*
+secrets*
+
+# Editors and local agents
+.vscode/
+.idea/
+.claude/
+.codex/
+
+# Private or raw experimental data
+data/raw/
+data/private/
+private-data/
+input-data/
+uploads/
+
+# Generated archives and local history backup
+offline-release/*.zip
+sites-app-history.bundle
