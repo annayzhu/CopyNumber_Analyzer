@@ -78,6 +78,32 @@ node --test tests/*.test.js
 
 测试覆盖：ΔΔCt 主公式、0-copy 校准品拦截、内参失败不误判、duplex/triplex 分层、自动/人工 NTC、未确认 NTC 拦截、NTC 扩增、校准冲突、一体化工作簿字段顺序与原始 Ct 完整性、样本数不足时不伪造 Confidence/|Z|、QuantStudio 重名 Cq Conf 列解析、384 孔边界，以及用户提供的真实 `.xls` 回放。
 
+## 单一源码与发布
+
+根目录中的 `cnvtool.html`、`styles.css`、`app.js`、`core.js` 和 `vendor/xlsx.full.min.js` 是唯一可信源码。不要直接修改 `sites-app/public` 中的同名发布副本。
+
+修改主源码后，同步网页版发布文件：
+
+```bash
+node scripts/sync-release-assets.mjs
+```
+
+只检查是否同步，不修改文件：
+
+```bash
+node scripts/sync-release-assets.mjs --check
+```
+
+生成独立离线发行包：
+
+```bash
+node scripts/build-offline-release.mjs --version v1.3
+```
+
+离线 ZIP 输出到 `offline-release/`；其中包含运行所需的全部 HTML、JavaScript、CSS、SheetJS、本地说明以及 Windows/macOS 启动文件，不依赖 `sites-app`。ZIP 是生成产物，不提交进 Git，正式对外版本建议作为 GitHub Release 附件发布。
+
+推荐发布顺序：修改根目录主源码 → 运行根目录测试 → 同步网页版 → 运行 `sites-app` 测试 → 生成离线 ZIP → 检查 ZIP 内容 → 发布。
+
 ## 方法文档
 
 - [CopyCaller 计算原理与实现边界](docs/CopyCaller_计算原理与实现边界.md)
